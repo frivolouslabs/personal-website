@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/helix.css?v=19" />
+    <link rel="stylesheet" href="/helix.css?v=20" />
     <script>
       try {
         var theme = localStorage.getItem("theme");
@@ -65,9 +65,33 @@
     </div>
     <div class="viewer" id="viewer" hidden>
       <img id="viewer-img" alt="" draggable="false" />
+      <button type="button" class="viewer-nav prev" id="viewer-prev" aria-label="Previous photo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M14.5 6.5 9 12l5.5 5.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+      <button type="button" class="viewer-nav next" id="viewer-next" aria-label="Next photo">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M9.5 6.5 15 12l-5.5 5.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
     </div>
     <div class="cursor" id="cursor" hidden></div>
     <p class="sr" id="status" aria-live="polite"></p>
-    <script src="/helix.js?v=25"></script>
+    <script src="/helix.js?v=26"></script>
   </body>
 </html>

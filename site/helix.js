@@ -3,6 +3,8 @@ const cursorEl = document.getElementById("cursor");
 const statusEl = document.getElementById("status");
 const viewer = document.getElementById("viewer");
 const viewerImg = document.getElementById("viewer-img");
+const viewerPrev = document.getElementById("viewer-prev");
+const viewerNext = document.getElementById("viewer-next");
 const themeButtons = document.querySelectorAll("[data-theme-choice]");
 const shapeButtons = document.querySelectorAll("[data-shape]");
 
@@ -379,6 +381,9 @@ function photoAt(index) {
 let zoomAnim = null;
 let zoomDir = "open";
 let openStamp = 0;
+let stepAnim = null;
+let viewerToken = 0;
+const REST = "translate3d(0px, 0px, 0) scale(1, 1)";
 
 function cardBox(index) {
   const card = cards.find((item) => item.index === index && !item.el.hidden);
@@ -440,8 +445,25 @@ function markSource(on) {
   if (card) card.el.classList.add("is-source");
 }
 
+function cancelStep() {
+  if (!stepAnim) return;
+  stepAnim.onfinish = null;
+  stepAnim.cancel();
+  stepAnim = null;
+  viewerImg.style.opacity = "1";
+  viewerImg.style.transform = REST;
+}
+
+function syncNav() {
+  const many = activePhotos().length > 1;
+  viewerPrev.hidden = !many;
+  viewerNext.hidden = !many;
+}
+
 function finishClose() {
   dropZoomAnim();
+  cancelStep();
+  viewerToken += 1;
   state.zoom = false;
   state.zoomClosing = false;
   state.zoomIndex = null;
@@ -449,16 +471,18 @@ function finishClose() {
   viewer.classList.remove("is-open");
   viewer.hidden = true;
   viewerImg.removeAttribute("src");
+  viewerImg.style.opacity = "1";
   viewerImg.style.transform = "none";
   document.documentElement.classList.remove("is-zoomed");
 }
 
 function setViewerSource(photo) {
+  const token = (viewerToken += 1);
   const full = photo.src.replace("/photos/wall/", "/photos/images/");
   viewerImg.dataset.fallback = photo.src;
   viewerImg.dataset.usedFallback = "";
   const upgrade = () => {
-    if (!state.zoom || state.zoomClosing) return;
+    if (token !== viewerToken || !state.zoom || state.zoomClosing) return;
     if (viewerImg.src.endsWith(full.slice(full.lastIndexOf("/")))) return;
     viewerImg.src = full;
   };
@@ -467,6 +491,7 @@ function setViewerSource(photo) {
   const pre = new Image();
   pre.decoding = "async";
   pre.onload = () => {
+    if (token !== viewerToken) return;
     if (typeof pre.decode === "function") {
       pre.decode().then(upgrade).catch(upgrade);
       return;
@@ -476,12 +501,53 @@ function setViewerSource(photo) {
   pre.src = full;
 }
 
+function showPhoto(index, dir) {
+  const photo = photoAt(index);
+  if (!photo) return;
+  state.zoomIndex = index;
+  layoutViewer(fittedBox(photo.w || state.cardW, photo.h || state.cardH));
+  setViewerSource(photo);
+  paint(0.016);
+  markSource(true);
+  viewerImg.style.opacity = "1";
+  viewerImg.style.transform = REST;
+  if (reduced || !dir) return;
+  const enter = dir > 0 ? "14%" : "-14%";
+  stepAnim = viewerImg.animate(
+    [
+      { transform: `translate3d(${enter}, 0, 0)`, opacity: 0 },
+      { transform: REST, opacity: 1 },
+    ],
+    { duration: 260, easing: ZOOM_EASE, fill: "both" },
+  );
+  stepAnim.onfinish = () => {
+    viewerImg.style.opacity = "1";
+    viewerImg.style.transform = REST;
+    stepAnim = null;
+  };
+}
+
+function stepZoom(dir) {
+  if (!state.zoom || state.zoomClosing || state.zoomIndex == null) return;
+  if (activePhotos().length < 2) return;
+  const nextIndex = state.zoomIndex + dir;
+  if (!photoAt(nextIndex)) return;
+  if (zoomAnim && zoomDir === "open") {
+    dropZoomAnim();
+    viewerImg.style.transform = REST;
+  }
+  cancelStep();
+  state.scroll += dir;
+  showPhoto(nextIndex, dir);
+}
+
 function openZoom(index) {
   const photo = photoAt(index);
   if (!photo) return;
   const from = cardBox(index);
   if (!from) return;
   dropZoomAnim();
+  cancelStep();
   openStamp = performance.now();
   state.zoomClosing = false;
   state.zoom = true;
@@ -489,11 +555,12 @@ function openZoom(index) {
   coast = 0;
   const to = fittedBox(photo.w || state.cardW, photo.h || state.cardH);
   const fromT = flightTransform(from, to);
-  const rest = "translate3d(0px, 0px, 0) scale(1, 1)";
+  const rest = REST;
   layoutViewer(to);
   viewerImg.style.transform = fromT;
   setViewerSource(photo);
   viewer.hidden = false;
+  syncNav();
   markSource(true);
   document.documentElement.classList.add("is-zoomed");
   cursorEl.hidden = true;
@@ -521,6 +588,7 @@ function openZoom(index) {
 
 function closeZoom() {
   if (!state.zoom || state.zoomClosing) return;
+  cancelStep();
   const from = cardBox(state.zoomIndex);
   document.documentElement.classList.remove("is-zoomed");
   viewer.classList.remove("is-open");
@@ -542,7 +610,7 @@ function closeZoom() {
   };
   const backT = flightTransform(from, to);
   const current = getComputedStyle(viewerImg).transform;
-  viewerImg.style.transform = current === "none" ? "translate3d(0px, 0px, 0) scale(1, 1)" : current;
+  viewerImg.style.transform = current === "none" ? REST : current;
   dropZoomAnim();
   zoomAnim = viewerImg.animate(
     [{ transform: viewerImg.style.transform }, { transform: backT }],
@@ -560,13 +628,66 @@ viewerImg.addEventListener("error", () => {
   viewerImg.src = fallback;
 });
 
-viewer.addEventListener("click", () => {
+let swipe = null;
+let blockClose = false;
+
+viewerPrev.addEventListener("click", (event) => {
+  event.stopPropagation();
+  stepZoom(-1);
+});
+viewerNext.addEventListener("click", (event) => {
+  event.stopPropagation();
+  stepZoom(1);
+});
+
+viewer.addEventListener("pointerdown", (event) => {
+  if (!state.zoom || state.zoomClosing || event.button !== 0) return;
+  if (event.target.closest && event.target.closest(".viewer-nav")) return;
+  swipe = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  try {
+    viewer.setPointerCapture(event.pointerId);
+  } catch (error) {
+    /* capture can fail on a stale pointer */
+  }
+});
+
+function endSwipe(event) {
+  if (!swipe || event.pointerId !== swipe.id) return;
+  const dx = event.clientX - swipe.x;
+  const dy = event.clientY - swipe.y;
+  swipe = null;
+  if (Math.hypot(dx, dy) > 10) blockClose = true;
+  if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy)) stepZoom(dx < 0 ? 1 : -1);
+}
+
+viewer.addEventListener("pointerup", endSwipe);
+viewer.addEventListener("pointercancel", (event) => {
+  if (swipe && event.pointerId === swipe.id) swipe = null;
+});
+
+viewer.addEventListener("click", (event) => {
+  if (blockClose) {
+    blockClose = false;
+    return;
+  }
+  if (event.target.closest && event.target.closest(".viewer-nav")) return;
   if (performance.now() - openStamp < 320) return;
   closeZoom();
 });
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeZoom();
+  if (event.key === "Escape") {
+    closeZoom();
+    return;
+  }
+  if (!state.zoom) return;
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    stepZoom(1);
+  } else if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    stepZoom(-1);
+  }
 });
 
 const press = { active: false, x: 0, y: 0, index: null, moved: false };
