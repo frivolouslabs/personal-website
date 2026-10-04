@@ -1,0 +1,11 @@
+/photos/*
+  X-Robots-Tag: noindex
+
+/helix.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/helix.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/
+  Cache-Control: public, max-age=0, must-revalidate
