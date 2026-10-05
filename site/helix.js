@@ -15,6 +15,7 @@ const DESKTOP_SPEED = -0.38;
 const COAST_DECAY = 2.4;
 const COAST_CAP = 14;
 const ZOOM_EASE = "cubic-bezier(0.2, 0.8, 0.4, 1)";
+const PHOTO_REV = "2";
 
 const pointer = { x: 0, y: 0, inside: false, overChrome: false, drag: false, lastY: 0 };
 const cursor = { x: 0, y: 0 };
@@ -193,6 +194,10 @@ function activePhotos() {
   return state.photos[state.shape];
 }
 
+function photoUrl(src) {
+  return `${src}?v=${PHOTO_REV}`;
+}
+
 function place(u) {
   const metrics = state.metrics;
   const step = metrics.pitch;
@@ -255,7 +260,7 @@ function assignSources(force) {
     const photos = activePhotos();
     if (!photos.length) return;
     const wrapped = ((card.index % photos.length) + photos.length) % photos.length;
-    const src = photos[wrapped].src;
+    const src = photoUrl(photos[wrapped].src);
     if (!force && card.src === src) return;
     card.src = src;
     card.front.src = src;
@@ -478,15 +483,15 @@ function finishClose() {
 
 function setViewerSource(photo) {
   const token = (viewerToken += 1);
-  const full = photo.src.replace("/photos/wall/", "/photos/images/");
-  viewerImg.dataset.fallback = photo.src;
+  const full = photoUrl(photo.src.replace("/photos/wall/", "/photos/images/"));
+  viewerImg.dataset.fallback = photoUrl(photo.src);
   viewerImg.dataset.usedFallback = "";
   const upgrade = () => {
     if (token !== viewerToken || !state.zoom || state.zoomClosing) return;
     if (viewerImg.src.endsWith(full.slice(full.lastIndexOf("/")))) return;
     viewerImg.src = full;
   };
-  viewerImg.src = photo.src;
+  viewerImg.src = photoUrl(photo.src);
   if (full === photo.src) return;
   const pre = new Image();
   pre.decoding = "async";
